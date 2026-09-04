@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- Finder uses this as the user-facing Sharing service name. -->
+	<key>CFBundleDisplayName</key>
+	<string>Easy Share</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<!-- Both come from build settings in project.yml, which the repo-root
+	     VERSION file and scripts/check-version.sh keep honest. Do not
+	     hardcode them here again: a literal silently overrides the
+	     setting and ships the wrong number. -->
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- The share extension has its own process and therefore its own local
+	     network declaration; the container's Info.plist is not enough. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Easy Share uses your local network to send files to your paired Android companion or Android Quick Share.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_FC9F5ED42C8A._tcp</string>
+		<string>_easyshare-companion._tcp</string>
+	</array>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.share-services</string>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<!-- Finder supplies selected files as public.file-url/public.url item
+			     providers. The declarative file key registers correctly but is
+			     not matched by Finder on current macOS; use its native predicate
+			     form and keep the rule strictly limited to file URLs. -->
+			<key>NSExtensionActivationRule</key>
+			<string>SUBQUERY(
+    extensionItems,
+    $extensionItem,
+    SUBQUERY(
+        $extensionItem.attachments,
+        $attachment,
+        SUBQUERY(
+            $attachment.registeredTypeIdentifiers,
+            $uti,
+            ($uti UTI-CONFORMS-TO &quot;public.file-url&quot;)
+        ).@count &gt;= 1
+    ).@count &gt;= 1
+).@count &gt;= 1</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

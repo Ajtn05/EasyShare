@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+macos/.build/
+macos/.swiftpm/
+
+# Xcode — the project is GENERATED from project.yml by xcodegen.
+# Never commit it; regenerate instead. See README.md § Prerequisites.
+# Unscoped on purpose: Android.xcworkspace lives at the repo root, not under
+# macos/, so a macos/-scoped pattern would miss it and its xcuserdata.
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+# README builds with -derivedDataPath build, which lands here.
+macos/build/
+
+# Local signing identity — see macos/Signing.xcconfig.
+macos/Signing.local.xcconfig
+
+# Task/prompt scratch kept in the working tree. Holds absolute paths and the
+# Apple team id, which is exactly what Signing.local.xcconfig exists to keep
+# out of tracked source.
+github-prep-prompt.md
+
+# Gradle / Android
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+*.keystore
+*.jks
+!debug.keystore
+
+# Release packaging output — see scripts/make-dmg.sh.
+*.dmg
+
+# Java
+*.class

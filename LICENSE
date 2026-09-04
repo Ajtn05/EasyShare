@@ -1,6 +1,11 @@
 MIT License
 
+<<<<<<< HEAD
 Copyright (c) 2026 Ajtn05
+||||||| (empty tree)
+=======
+Copyright (c) 2026 Aldrin Nellas
+>>>>>>> 005d495 (Initial commit: two-way file transfer between macOS and Android)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

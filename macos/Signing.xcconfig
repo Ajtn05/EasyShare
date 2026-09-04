@@ -1,0 +1,21 @@
+// Code signing for the generated EasyShare.xcodeproj.
+//
+// DEVELOPMENT_TEAM is intentionally blank here. A blank value keeps this file
+// buildable in a fresh clone and in CI, which never signs. Put your own team id
+// in Signing.local.xcconfig instead — that file is gitignored, so it stays on
+// your machine:
+//
+//     echo 'DEVELOPMENT_TEAM = ABCDE12345' > macos/Signing.local.xcconfig
+//
+// Find your team id with:
+//
+//     security find-certificate -c "Apple Development" -p |
+//       openssl x509 -noout -subject     # the team id is the OU field
+//
+// The include below is the optional form (`#include?`), so a clone without a
+// Signing.local.xcconfig still generates and compiles; only signing is skipped.
+
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+
+#include? "Signing.local.xcconfig"

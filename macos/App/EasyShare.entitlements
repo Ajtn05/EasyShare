@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Incoming: this target runs the Android Quick Share LAN listener. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- Bonjour registration and any Quick Share peer connection. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Received files land in ~/Downloads. -->
+	<key>com.apple.security.files.downloads.read-write</key>
+	<true/>
+</dict>
+</plist>

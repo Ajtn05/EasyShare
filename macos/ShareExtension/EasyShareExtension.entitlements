@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Outgoing only. The extension sends; it never listens. The container
+	     app's entitlements do not apply to this process. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- The files Finder hands over arrive as security-scoped URLs. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<!-- The sandbox flag above MUST match the container app's: macOS refuses to
+	     load an extension whose sandboxing disagrees with its container. The
+	     two are signed with one identity by the project-level configFiles in
+	     project.yml. -->
+</dict>
+</plist>

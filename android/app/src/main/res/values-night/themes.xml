@@ -1,0 +1,18 @@
+<resources>
+    <!-- Dark appearance, picked automatically when the phone is in dark mode.
+         Mirrors values/themes.xml with the dark Material parents and the
+         dark-mode brand blue from Palette in Theme.kt. -->
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#7692FF</item>
+    </style>
+
+    <style name="ApprovalDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:colorAccent">#7692FF</item>
+    </style>
+</resources>

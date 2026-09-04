@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android companion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # No local.properties is written: the runner ships the Android SDK and
+      # sets ANDROID_HOME, which AGP uses when sdk.dir is absent. Verified
+      # locally by building with local.properties moved aside.
+      - name: Unit tests and debug APK
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  macos:
+    name: macOS transport and app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Marketing version agrees across platforms
+        run: ./scripts/check-version.sh
+
+      # The real guarantee of this job: 29 transport checks covering filename
+      # safety, framing, UKEY2/D2D crypto, QR activation, and TCP loopback.
+      # Needs no signing and no Xcode project.
+      - name: Transport selftest
+        working-directory: macos
+        run: |
+          swift build
+          swift run easyshare-selftest
+
+      # EasyShare.xcodeproj is deliberately untracked; it is generated here.
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd macos && xcodegen generate
+
+      # Compile-only. CI never signs: the certificate is not in the repo and is
+      # deliberately not in secrets, so signing stays a local step.
+      - name: Compile app and Finder extension
+        working-directory: macos
+        run: |
+          xcodebuild -project EasyShare.xcodeproj -scheme EasyShare \
+            -configuration Debug -sdk macosx build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""

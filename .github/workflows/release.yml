@@ -1,0 +1,226 @@
+name: Release
+
+# Tag-driven. `git tag v0.5.1 && git push origin v0.5.1` builds both platforms
+# and attaches the artifacts to a GitHub Release. The tag must match the root
+# VERSION file or the run fails before anything is built.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # required to create the release and upload assets
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    env:
+      # Secrets cannot be used in `if:` directly, so they are lifted into env
+      # and the steps below branch on that. Absent secrets are not an error:
+      # the job falls back to the debug-signed apk.
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches VERSION
+        run: ./scripts/check-version.sh "$GITHUB_REF_NAME"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode keystore
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "EASYSHARE_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        if: env.KEYSTORE_BASE64 != ''
+        working-directory: android
+        env:
+          EASYSHARE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          EASYSHARE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          EASYSHARE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew :app:testDebugUnitTest :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk \
+             "$RUNNER_TEMP/easy-share-${GITHUB_REF_NAME}.apk"
+
+      # An unsigned release apk cannot be installed on any device, so it is not
+      # a useful fallback. The debug apk is signed with Android's debug key and
+      # does install. It is published under a name that says so; the release
+      # notes step marks the whole release as unsigned.
+      - name: Build debug APK (no signing secrets)
+        if: env.KEYSTORE_BASE64 == ''
+        working-directory: android
+        run: |
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "$RUNNER_TEMP/easy-share-${GITHUB_REF_NAME}-debug-unsigned-release.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: ${{ runner.temp }}/easy-share-*.apk
+          if-no-files-found: error
+
+  macos:
+    name: macOS disk image
+    runs-on: macos-14
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches VERSION
+        run: ./scripts/check-version.sh "$GITHUB_REF_NAME"
+
+      # A release must not ship code that fails its own transport checks.
+      - name: Transport selftest
+        working-directory: macos
+        run: |
+          swift build
+          swift run easyshare-selftest
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd macos && xcodegen generate
+
+      - name: Import Developer ID certificate
+        if: env.MACOS_CERT_P12 != ''
+        env:
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Build signed app
+        if: env.MACOS_CERT_P12 != ''
+        working-directory: macos
+        env:
+          TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
+        run: |
+          xcodebuild -project EasyShare.xcodeproj -scheme EasyShare \
+            -configuration Release -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/dd" build \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --options runtime"
+
+      # Ad-hoc ("-") rather than unsigned: every binary on Apple Silicon must
+      # carry at least an ad-hoc signature to run at all. This build is NOT
+      # notarized, so Gatekeeper will refuse it on first open until the user
+      # clears quarantine. The release notes say so.
+      - name: Build ad-hoc signed app (no signing secrets)
+        if: env.MACOS_CERT_P12 == ''
+        working-directory: macos
+        run: |
+          xcodebuild -project EasyShare.xcodeproj -scheme EasyShare \
+            -configuration Release -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/dd" build \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
+
+      - name: Package disk image
+        run: |
+          ./scripts/make-dmg.sh \
+            "$RUNNER_TEMP/dd/Build/Products/Release/EasyShare.app" \
+            "$RUNNER_TEMP/EasyShare-${GITHUB_REF_NAME}.dmg"
+
+      - name: Notarize and staple
+        if: env.MACOS_CERT_P12 != ''
+        env:
+          TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
+          AC_ISSUER_ID: ${{ secrets.AC_ISSUER_ID }}
+          AC_KEY_ID: ${{ secrets.AC_KEY_ID }}
+          AC_PRIVATE_KEY: ${{ secrets.AC_PRIVATE_KEY }}
+        run: |
+          dmg="$RUNNER_TEMP/EasyShare-${GITHUB_REF_NAME}.dmg"
+          codesign --force --sign "Developer ID Application" \
+            --timestamp "$dmg"
+          echo "$AC_PRIVATE_KEY" > "$RUNNER_TEMP/ac.p8"
+          xcrun notarytool submit "$dmg" --wait \
+            --issuer "$AC_ISSUER_ID" --key-id "$AC_KEY_ID" \
+            --key "$RUNNER_TEMP/ac.p8"
+          rm -f "$RUNNER_TEMP/ac.p8"
+          xcrun stapler staple "$dmg"
+          spctl --assess --type open --context context:primary-signature -v "$dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: ${{ runner.temp }}/EasyShare-*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [android, macos]
+    runs-on: ubuntu-latest
+    env:
+      HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      HAS_MACOS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Write release notes
+        run: |
+          {
+            echo "Easy Share ${GITHUB_REF_NAME}"
+            echo
+            echo "## macOS"
+            echo
+            if [ "$HAS_MACOS_SIGNING" = "true" ]; then
+              echo "Open the .dmg and drag **EasyShare.app** to **Applications**."
+              echo "Launch it once; the Finder Share extension registers itself."
+            else
+              echo "> **This build is not notarized.** Gatekeeper will refuse it"
+              echo "> on first open. After dragging it to Applications, run:"
+              echo '> `xattr -dr com.apple.quarantine /Applications/EasyShare.app`'
+              echo
+              echo "Then open it once; the Finder Share extension registers itself."
+            fi
+            echo
+            echo "## Android"
+            echo
+            if [ "$HAS_ANDROID_SIGNING" = "true" ]; then
+              echo "Sideload the .apk on the phone."
+            else
+              echo "> **This is a debug-signed build**, published because no"
+              echo "> release keystore is configured. It installs, but it is"
+              echo "> debuggable and cannot upgrade a release-signed install."
+            fi
+          } > notes.md
+          cat notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Easy Share $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            dist/*

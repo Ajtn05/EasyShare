@@ -1,0 +1,15 @@
+* text=auto
+
+# The Gradle wrapper scripts are executed by their target platform's shell, so
+# their line endings are not negotiable.
+gradlew text eol=lf
+*.bat text eol=crlf
+
+# Anchored at any depth: this repo's wrapper jar is android/gradle/wrapper/...,
+# and a leading-slash-free pattern that contains a slash would otherwise only
+# match at the repo root.
+**/gradle/wrapper/gradle-wrapper.jar binary
+
+# swift-protobuf output. Marked generated so GitHub does not report this repo's
+# language stats as mostly machine-written Swift.
+macos/Sources/EasyShareKit/Transports/QuickShare/Wire/Generated/** linguist-generated=true
