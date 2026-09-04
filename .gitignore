@@ -24,6 +24,14 @@ macos/Signing.local.xcconfig
 # out of tracked source.
 github-prep-prompt.md
 
+# Optional internal handoff and coding-agent guidance. The public repository
+# keeps its user-facing README, security policy, protocol contract, and release
+# guide instead.
+AGENTS.md
+CLAUDE.md
+docs/HANDOFF.md
+android/README.md
+
 # Gradle / Android
 android/.gradle/
 android/.kotlin/
