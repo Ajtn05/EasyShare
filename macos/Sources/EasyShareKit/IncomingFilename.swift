@@ -1,31 +1,18 @@
 import Foundation
 
-/// Sanitizes a filename supplied by a remote peer.
-///
-/// This is security-critical and is the reason it lives in its own file with
-/// real tests. The sender controls `name` entirely; a hostile peer will send
-/// `../../../.zshrc`, `.bashrc`, or a 4000-character name to see what happens.
-/// Everything written to disk goes through here first.
+/// Reduces a peer-supplied filename to a safe path component.
 public enum IncomingFilename {
 
     public static let fallback = "file"
-    /// Conservative — HFS+/APFS allow 255 *bytes*, and we leave room for a
-    /// " (12)" collision suffix. This is deliberately a byte count, rather
-    /// than a Swift `Character` count: a remote name can use multi-byte UTF-8
-    /// characters too.
+    /// A byte limit leaves room for a collision suffix on APFS.
     public static let maxLength = 200
 
-    /// Reduce an untrusted name to a single safe path component.
     public static func sanitize(_ raw: String) -> String {
-        // Take the last component only. This alone defeats "../../x" and
-        // "/etc/passwd", but we still scrub afterwards rather than relying on it.
         var name = raw
         if let slash = name.lastIndex(where: { $0 == "/" || $0 == "\\" }) {
             name = String(name[name.index(after: slash)...])
         }
 
-        // Strip control characters, path separators, and the NUL that truncates
-        // C-string APIs further down the stack.
         name = String(name.unicodeScalars.filter { scalar in
             !CharacterSet.controlCharacters.contains(scalar)
                 && scalar != "/"
@@ -33,13 +20,10 @@ public enum IncomingFilename {
                 && scalar != "\0"
         })
 
-        // ":" is a path separator to Carbon-era APIs and displays as "/" in Finder.
         name = name.replacingOccurrences(of: ":", with: "-")
 
         name = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // "." and ".." are traversal; a leading dot hides the file, which is a
-        // nasty surprise in a Downloads folder.
         while name.hasPrefix(".") {
             name.removeFirst()
         }
@@ -51,13 +35,10 @@ public enum IncomingFilename {
         return truncatePreservingExtension(name, to: maxLength)
     }
 
-    /// Truncate the base name, keeping the extension, so "verylong….jpg" stays
-    /// a jpg and still opens in Preview.
     static func truncatePreservingExtension(_ name: String, to limit: Int) -> String {
         guard name.utf8.count > limit else { return name }
 
         let ext = (name as NSString).pathExtension
-        // A 30-char "extension" is not an extension, it's part of the name.
         guard !ext.isEmpty, ext.utf8.count <= 10 else {
             return truncateUTF8(name, to: limit)
         }
@@ -78,12 +59,7 @@ public enum IncomingFilename {
         return result
     }
 
-    /// Pick a name that doesn't collide in `directory`, Finder-style:
-    /// photo.jpg, photo (2).jpg, photo (3).jpg …
-    ///
-    /// - Note: inherently racy against other writers. The caller must still
-    ///   create the file with `O_EXCL` semantics and retry on collision;
-    ///   `FileManager.moveItem` throwing is the backstop.
+    /// Returns a Finder-style available name; callers must still create atomically.
     public static func uniqueURL(
         for sanitizedName: String,
         in directory: URL,
@@ -102,7 +78,6 @@ public enum IncomingFilename {
             if !fileExists(url) { return url }
             n += 1
         }
-        // Pathological directory. Fall back to something that cannot collide.
         let unique = ext.isEmpty ? "\(base) \(UUID().uuidString)" : "\(base) \(UUID().uuidString).\(ext)"
         return directory.appendingPathComponent(unique)
     }

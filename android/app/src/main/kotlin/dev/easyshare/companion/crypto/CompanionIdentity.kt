@@ -14,18 +14,9 @@ import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.security.auth.x500.X500Principal
 
-/**
- * The companion has exactly one local TLS identity. A Mac stores its
- * certificate fingerprint only after the user compares the pairing code on
- * both devices; regular sends never fall back to platform certificate trust.
- */
+/** Manages the TLS identity used by paired Mac connections. */
 object CompanionIdentity {
-    // v3 intentionally replaces the initial test identities. Android's own
-    // KeyGenParameterSpec documentation notes that TLS server keys generally
-    // need DIGEST_NONE and RSA decryption paddings because Conscrypt performs
-    // some TLS operations itself rather than through Signature. Restricting
-    // the key to application-level signing caused the server to abort before
-    // sending its certificate on this Android 16 device.
+    // Changing the alias invalidates existing pairings.
     private const val alias = "dev.easyshare.companion.tls.v3"
 
     @Synchronized

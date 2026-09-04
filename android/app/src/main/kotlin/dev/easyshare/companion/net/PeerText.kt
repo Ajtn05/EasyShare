@@ -1,10 +1,6 @@
 package dev.easyshare.companion.net
 
-/**
- * Names from a peer are display data, never trusted text. Keep the rules in
- * one place so the name shown in an approval, stored for a pairing, and put in
- * mDNS all have the same bounded, non-spoofing form.
- */
+/** Normalizes peer-supplied labels for display and discovery. */
 object PeerText {
     const val maximumDisplayNameBytes = 63
 

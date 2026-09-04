@@ -2,9 +2,7 @@ import Foundation
 import Network
 import SwiftProtobuf
 
-/// A local file offered through an ephemeral Quick Share session. Source URLs
-/// are read only while `send` is active; callers that received a security-
-/// scoped URL must keep that scope open for the duration of the call.
+/// A file offered through an ephemeral Quick Share session.
 public struct QuickShareOutgoingFile {
     public let url: URL
     public let name: String
@@ -19,11 +17,7 @@ public struct QuickShareOutgoingFile {
     }
 }
 
-/// Initiates the Wi-Fi-LAN branch of a Quick Share transfer.
-///
-/// Every transfer creates an ephemeral UKEY2 identity. In Android's Everyone
-/// visibility mode the user verifies the short PIN rather than relying on a
-/// remembered application-level identity.
+/// Sends files through Quick Share's Wi-Fi LAN transport.
 public final class QuickShareSender {
     public typealias Progress = (_ fileIndex: Int, _ fraction: Double) -> Void
     public typealias VerificationPIN = (_ pin: String) -> Void
@@ -40,13 +34,7 @@ public final class QuickShareSender {
     private var stage = "opening the Quick Share connection"
     private var safeDisconnectionEnabled = false
 
-    /// A QR-triggered Android listener is local and should accept quickly. A
-    /// finite bound prevents a stale mDNS record from trapping the share
-    /// extension in its connecting state indefinitely.
     private static let connectionTimeout: DispatchTimeInterval = .seconds(12)
-    /// Samsung's receiver can still be writing the final encrypted FILE frame
-    /// after the sender's local write completed. Keep the socket alive until it
-    /// confirms that the payload has drained.
     private static let safeDisconnectionTimeout: DispatchTimeInterval = .milliseconds(1_500)
 
     public init(
@@ -63,10 +51,7 @@ public final class QuickShareSender {
         parameters.includePeerToPeer = true
         let connection: NWConnection
         if let serviceEndpoint = peer.serviceEndpoint {
-            // Connect directly to the DNS-SD service. The old discovery code
-            // first opened and cancelled a TCP connection merely to learn the
-            // service's address, which can exhaust Android's temporary QR
-            // listener before this real transfer begins.
+            // Preserve the DNS-SD endpoint; probing can consume a QR listener.
             connection = NWConnection(to: serviceEndpoint, using: parameters)
         } else {
             guard let port = NWEndpoint.Port(rawValue: peer.port) else {
@@ -86,8 +71,6 @@ public final class QuickShareSender {
         Task { await writer.close() }
     }
 
-    /// Opens the connection, waits for the Android receiver to accept the
-    /// offer, and streams files in order. It may be called once per instance.
     public func send(
         files: [QuickShareOutgoingFile],
         verificationPIN: @escaping VerificationPIN = { _ in },
@@ -118,11 +101,7 @@ public final class QuickShareSender {
         verificationPIN(ukeyResult.result.pin)
         try await writer.sendPlain(ukeyResult.clientFinish)
 
-        // Nearby Connections makes the receiver/server acknowledge the UKEY2
-        // exchange first. Stock Android closes the session if it receives the
-        // initiator's response while it is still trying to send its own. Our
-        // original loopback-only implementation had these two frames reversed,
-        // so its matching Mac receiver hid the interoperability bug.
+        // The server response precedes the client response in Nearby's UKEY2 exchange.
         advance(to: "waiting for the phone's connection acknowledgement")
         let connectionResponse = try Location_Nearby_Connections_OfflineFrame(serializedBytes: await receiveRawFrame())
         guard connectionResponse.version == .v1,
@@ -236,8 +215,7 @@ public final class QuickShareSender {
         var response = Location_Nearby_Connections_ConnectionResponseFrame()
         response.response = .accept
         response.status = 0
-        // The peer can only use the safe-disconnect acknowledgement after both
-        // connection responses advertise this version.
+        // Enables safe-disconnect negotiation.
         response.safeToDisconnectVersion = 1
         var os = Location_Nearby_Connections_OsInfo()
         os.type = .apple
@@ -280,8 +258,7 @@ public final class QuickShareSender {
 
     private func sendPairedKeyResult() async throws {
         var result = Nearby_Sharing_Service_Proto_PairedKeyResultFrame()
-        // We implement the public/Everyone exchange, not the paired-device
-        // certificate flow. `unable` is the protocol's explicit outcome.
+        // Public-mode senders do not implement paired-key exchange.
         result.status = .unable
         var frame = Nearby_Sharing_Service_Proto_Frame()
         frame.version = .v1
@@ -294,8 +271,7 @@ public final class QuickShareSender {
 
     private func sendIntroduction(files: [QuickShareOutgoingFile], payloadIDs: [Int64]) async throws {
         var introduction = Nearby_Sharing_Service_Proto_IntroductionFrame()
-        // Current Android builds reject an otherwise valid FILE introduction
-        // when this remains the proto default (`UNKNOWN`).
+        // Android rejects an UNKNOWN use case.
         introduction.useCase = .nearbyShare
         introduction.fileMetadata = try zip(files, payloadIDs).map { file, payloadID in
             var metadata = Nearby_Sharing_Service_Proto_FileMetadata()
@@ -510,9 +486,7 @@ public final class QuickShareSender {
             case .keepAlive:
                 if !frame.v1.keepAlive.ack { try await sendKeepAlive(ack: true) }
             case .payloadTransfer:
-                // File payload acknowledgements can arrive just before the
-                // safe-disconnect acknowledgement. They confirm a payload but
-                // do not themselves permit closing the TCP connection.
+                // Payload acknowledgements do not complete safe-disconnect.
                 guard frame.v1.payloadTransfer.packetType == .payloadAck,
                       frame.v1.payloadTransfer.hasPayloadHeader,
                       frame.v1.payloadTransfer.payloadHeader.hasID
@@ -523,12 +497,7 @@ public final class QuickShareSender {
                 if frame.v1.disconnection.ackSafeToDisconnect {
                     return
                 }
-                // The usual Nearby direction is sender request, receiver
-                // acknowledgement. Android versions in the field can also
-                // have the receiver initiate the exchange as soon as it
-                // commits the final FILE payload. Treat that request as a
-                // successful mutual confirmation rather than declaring a
-                // protocol failure while both sides are ready to close.
+                // Accept receiver-initiated safe-disconnect for Android interop.
                 guard frame.v1.disconnection.requestSafeToDisconnect else {
                     throw QuickShareError.connectionClosedDuring(stage)
                 }
@@ -580,9 +549,7 @@ public final class QuickShareSender {
     }
 }
 
-/// Serializes encrypted sends and decryptions. `NWConnection.send` is invoked
-/// before the actor suspends, so even a keepalive task cannot overtake a
-/// transfer frame and invalidate D2D sequence ordering.
+/// Serializes encrypted traffic to preserve D2D sequence ordering.
 private actor QuickShareSessionWriter {
     private let connection: NWConnection
     private var codec: QuickShareD2DCodec?

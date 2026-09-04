@@ -1,7 +1,4 @@
 <resources>
-    <!-- Dark appearance, picked automatically when the phone is in dark mode.
-         Mirrors values/themes.xml with the dark Material parents and the
-         dark-mode brand blue from Palette in Theme.kt. -->
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>

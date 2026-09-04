@@ -26,10 +26,6 @@ import dev.easyshare.companion.net.CompanionReceiverService
 import dev.easyshare.companion.net.SaveLocationStore
 import java.util.function.Consumer
 
-/**
- * A compact control surface for the companion. The recurring control lives in
- * Quick Settings; this screen explains the state and handles first pairing.
- */
 class MainActivity : Activity() {
     private lateinit var statusCard: LinearLayout
     private lateinit var statusDot: View
@@ -46,8 +42,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Both are dark fills, so the status bar keeps light icons either way;
-        // only the navigation bar flips its icon colour with the appearance.
         window.statusBarColor = if (isDarkMode) colors.background else colors.ink
         window.navigationBarColor = colors.surface
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -75,8 +69,6 @@ class MainActivity : Activity() {
             addView(content)
         }
 
-        // A compact icon + title/subtitle row, the same header shape the Mac
-        // Finder sheet uses, rather than a full-width stacked hero.
         val headerIcon = ImageView(this).apply {
             setImageResource(R.drawable.ic_brand_mark)
             contentDescription = null

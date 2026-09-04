@@ -4,9 +4,7 @@ import Foundation
 import Security
 import SwiftProtobuf
 
-/// Keys for the encrypted Nearby Connections phase. They are intentionally
-/// `Data`, rather than a persistent application identity: Quick Share's D2D
-/// session is an unauthenticated, ephemeral exchange.
+/// Keys for an ephemeral Nearby Connections session.
 public struct QuickShareD2DKeys: Sendable {
     fileprivate let decryptKey: Data
     fileprivate let receiveHMACKey: SymmetricKey
@@ -14,10 +12,7 @@ public struct QuickShareD2DKeys: Sendable {
     fileprivate let sendHMACKey: SymmetricKey
 
     static func deriving(from nextProtocolSecret: Data, role: QuickShareRole) -> QuickShareD2DKeys {
-        // This is the fixed D2D salt from Nearby Connections' P-256/SHA-512
-        // UKEY2 branch. It is *not* SHA-256("D2D"). Using that convenient but
-        // incorrect value lets two EasyShare loopback peers interoperate while
-        // making every first encrypted frame unreadable to stock Android.
+        // Fixed P-256/SHA-512 D2D salt.
         let d2dSalt = Data([
             0x82, 0xAA, 0x55, 0xA0, 0xD3, 0x97, 0xF8, 0x83,
             0x46, 0xCA, 0x1C, 0xEE, 0x8D, 0x39, 0x09, 0xB9,
@@ -58,8 +53,7 @@ public enum QuickShareRole: Sendable {
     case responder
 }
 
-/// The one component that needs CommonCrypto. CryptoKit has no AES-CBC API;
-/// keeping CBC here prevents it leaking into transport or user-interface code.
+/// AES-CBC helpers for the D2D codec.
 enum QuickShareAESCBC {
     static func encrypt(_ plaintext: Data, key: Data, iv: Data) throws -> Data {
         try crypt(operation: CCOperation(kCCEncrypt), input: plaintext, key: key, iv: iv)
@@ -105,9 +99,7 @@ enum QuickShareAESCBC {
     }
 }
 
-/// Authenticates, encrypts, and sequence-checks the post-UKEY2 message stream.
-/// One codec belongs to exactly one connection and is called only on that
-/// connection's serial queue.
+/// Authenticates, encrypts, and sequence-checks post-UKEY2 frames.
 public final class QuickShareD2DCodec {
     private let keys: QuickShareD2DKeys
     private var sentSequence: Int32 = 0

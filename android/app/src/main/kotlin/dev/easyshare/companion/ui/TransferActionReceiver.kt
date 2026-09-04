@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import dev.easyshare.companion.net.CompanionReceiverService
 
-/** Notification actions are routed back to the existing foreground receiver. */
 class TransferActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return

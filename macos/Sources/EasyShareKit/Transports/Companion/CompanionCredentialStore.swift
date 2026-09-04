@@ -1,9 +1,6 @@
 import Foundation
 import Security
 
-/// The token is a bearer capability, so it is kept in the extension's normal
-/// Keychain rather than in user defaults. Discovery metadata alone cannot send
-/// files to a paired Android receiver.
 public struct StoredCompanion: Codable, Identifiable, Equatable {
     public let id: String
     public var displayName: String
@@ -63,7 +60,6 @@ public enum CompanionCredentialStore {
         values.append(record)
         values.sort { $0.lastUsed > $1.lastUsed }
         let retained = Array(values.prefix(8))
-        // Remove credentials only for a record we deliberately evicted.
         for removed in values.dropFirst(8) { deleteToken(for: removed.id) }
         guard let encoded = try? JSONEncoder().encode(retained) else { throw CompanionError.invalidResponse("could not save pairing") }
         UserDefaults.standard.set(encoded, forKey: recordsKey)

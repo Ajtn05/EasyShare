@@ -15,11 +15,6 @@ import dev.easyshare.companion.net.CompanionReceiverService
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- * A user-enabled overlay for the approval step. It contains its own controls,
- * never passes touches through the card, and is removed on every decision or
- * session cleanup. Android requires the separately granted overlay capability.
- */
 object ApprovalOverlay {
     private val main = Handler(Looper.getMainLooper())
     private var windowManager: WindowManager? = null

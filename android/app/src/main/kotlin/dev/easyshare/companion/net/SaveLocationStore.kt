@@ -3,10 +3,7 @@ package dev.easyshare.companion.net
 import android.content.Context
 import android.net.Uri
 
-/**
- * Stores an optional, user-granted document-tree destination for received
- * files. With no stored tree, the receiver uses public Downloads as before.
- */
+/** Persists the optional user-selected destination for received files. */
 object SaveLocationStore {
     private const val PREFERENCES = "save-location"
     private const val TREE_URI = "tree-uri"

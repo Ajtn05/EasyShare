@@ -5,7 +5,6 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import dev.easyshare.companion.net.CompanionReceiverService
 
-/** The one-tap control after the first pairing. It never implies a reboot survives. */
 class ReceiverTileService : TileService() {
     override fun onStartListening() = updateTile()
 

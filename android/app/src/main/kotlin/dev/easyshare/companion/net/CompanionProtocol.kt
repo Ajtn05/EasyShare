@@ -47,7 +47,6 @@ object CompanionProtocol {
     fun base64Url(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     fun decodeBase64(value: String): ByteArray = Base64.decode(value, Base64.DEFAULT)
 
-    /** Both pairing screens calculate this locally; it is never trusted from the wire. */
     fun comparisonCode(challenge: ByteArray, fingerprintHex: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(challenge + fingerprintHex.toByteArray(Charsets.US_ASCII))

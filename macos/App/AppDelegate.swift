@@ -1,9 +1,6 @@
 import Cocoa
 import EasyShareKit
 
-/// The long-lived Quick Share receiver. It is an accessory app: its status
-/// item is the only persistent UI, while Finder invokes the embedded extension
-/// for Mac-to-Android sends.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 

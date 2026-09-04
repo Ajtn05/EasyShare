@@ -9,18 +9,12 @@ import android.widget.LinearLayout
 import android.widget.Space
 import android.widget.TextView
 
-/**
- * Easy Share's palette. One instance per appearance, picked from the system
- * dark-mode setting, so the companion follows the phone the way the Mac side
- * follows the Mac. The dark values match the macOS sheet's dark palette.
- */
 class Palette(
     val background: Int,
     val surface: Int,
     val ink: Int,
     val muted: Int,
     val primary: Int,
-    /** Text drawn on top of a filled `primary` button. */
     val onPrimary: Int,
     val primarySurface: Int,
     val success: Int,
@@ -51,8 +45,6 @@ private val DARK = Palette(
     ink = 0xffeef2f8.toInt(),
     muted = 0xff97a3b8.toInt(),
     primary = 0xff7692ff.toInt(),
-    // The dark-mode brand blue is light enough that white text on it would
-    // fall below a readable contrast ratio; ink-on-blue is the legible pair.
     onPrimary = 0xff0f131b.toInt(),
     primarySurface = 0xff252e4b.toInt(),
     success = 0xff46d493.toInt(),
@@ -68,7 +60,6 @@ val Context.isDarkMode: Boolean
 
 val Context.colors: Palette get() = if (isDarkMode) DARK else LIGHT
 
-/** A shared corner-radius scale (dp) so cards, chips, and sheets read as one system. */
 object Radius {
     const val CHIP = 14
     const val CARD = 14
@@ -95,12 +86,10 @@ fun Context.brandText(value: String, size: Float, color: Int, style: Int = Typef
     typeface = Typeface.create(Typeface.DEFAULT, style)
 }
 
-/** An uppercase, letter-spaced label in the brand color — the eyebrow above a modal's headline. */
 fun Context.eyebrowText(value: String) = brandText(value, 11f, colors.primary, Typeface.BOLD).apply {
     letterSpacing = 0.08f
 }
 
-/** An uppercase, letter-spaced divider between sections of a longer screen. */
 fun Context.sectionLabel(value: String) = brandText(value, 11f, colors.muted, Typeface.BOLD).apply {
     letterSpacing = 0.08f
 }
@@ -113,7 +102,6 @@ fun Context.matchParent(top: Int = 0, height: Int = LinearLayout.LayoutParams.WR
         topMargin = dp(top)
     }
 
-/** A full-bleed, non-all-caps action button — the one button style Easy Share uses everywhere. */
 fun Context.brandButton(label: String, color: Int, textColor: Int, strokeColor: Int? = null) = Button(this).apply {
     text = label
     isAllCaps = false

@@ -1,9 +1,6 @@
 package dev.easyshare.companion.net
 
-/**
- * Mirrors the macOS IncomingFilename rules. Remote names are a filesystem
- * boundary even when they arrived over a paired and pinned connection.
- */
+/** Sanitizes peer-supplied filenames before they reach storage. */
 object IncomingFilename {
     const val fallback = "file"
     const val maximumLength = 200

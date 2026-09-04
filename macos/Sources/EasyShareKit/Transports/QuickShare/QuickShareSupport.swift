@@ -1,16 +1,12 @@
 import Foundation
 
-/// Limits and normalization shared by the public Quick Share implementation.
-/// They live beside the transport so it has no dependency on the removed TLS
-/// receiver or its pairing model.
+/// Limits and normalization shared by the Quick Share transport.
 enum QuickShareLimits {
     static let maxFilesPerOffer = 512
     static let maximumTotalBytes: Int64 = 100 * 1024 * 1024 * 1024
 }
 
-/// Peer-supplied device names and endpoint ids are displayed back to the user.
-/// Strip formatting controls and cap the UTF-8 length before they reach AppKit
-/// or a Bonjour TXT record.
+/// Normalizes peer-supplied text for display and discovery.
 public enum PeerText {
     public static let maxDisplayNameBytes = 63
 
@@ -45,8 +41,7 @@ public enum PeerText {
     }
 }
 
-/// A staged incoming file with a strict advertised-size ceiling. This protects
-/// the Downloads move from a sender that continues writing after its offer.
+/// A staged incoming file with an advertised-size ceiling.
 final class QuickShareUploadSink: @unchecked Sendable {
     private let handle: FileHandle
     private let limit: Int64

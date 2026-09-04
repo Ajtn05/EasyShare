@@ -2,7 +2,6 @@ package dev.easyshare.companion.ui
 
 import android.content.Context
 
-/** The user chooses whether incoming decisions stay in notifications or float above apps. */
 object ApprovalStyleStore {
     private const val PREFERENCES = "approval-style"
     private const val OVERLAY_KEY = "use-overlay"

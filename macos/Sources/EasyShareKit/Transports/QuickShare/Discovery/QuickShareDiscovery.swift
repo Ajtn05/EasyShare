@@ -1,27 +1,15 @@
 import Foundation
 import Network
 
-/// A Wi-Fi-LAN Quick Share endpoint. It intentionally has no persistent
-/// identity: the Everyone-visible discovery format only provides an ephemeral
-/// endpoint name and an untrusted display name.
+/// A Wi-Fi LAN Quick Share endpoint.
 public struct QuickSharePeer: Identifiable, Equatable {
     public let id: String
     public let displayName: String
-    /// Whether Quick Share supplied a meaningful public name for this peer.
-    /// Hidden peers are retained for QR-token matching but should not be shown
-    /// as individually selectable destination rows.
     public let hasDisplayName: Bool
     public let host: String
     public let port: UInt16
-    /// Bonjour service endpoints are intentionally retained until the sender
-    /// connects. Resolving one by opening a throwaway TCP connection can
-    /// consume Android's short-lived QR listener before the real transfer.
     let serviceEndpoint: NWEndpoint?
-    /// The QR TLV from the discovered endpoint. It is deliberately exposed as
-    /// opaque data so a QR session can verify ownership before connecting.
     public let qrCodeData: Data?
-    /// An opaque, public marker from the current advertisement. It supports a
-    /// local recipient preference only; it is neither secret nor authenticated.
     public let advertisingIdentity: Data
 
     public var address: String {
@@ -29,9 +17,6 @@ public struct QuickSharePeer: Identifiable, Equatable {
         return host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)"
     }
 
-    /// Creates a peer from a concrete endpoint. This is retained for loopback
-    /// tests and a possible future explicit-address handoff; Bonjour discovery
-    /// itself preserves its service endpoint until the sender connects.
     public init(
         id: String = UUID().uuidString,
         displayName: String,
@@ -103,12 +88,8 @@ public struct QuickSharePeer: Identifiable, Equatable {
     }
 }
 
-/// Browses the public `_FC9F5ED42C8A._tcp` service. Android normally starts
-/// advertising this service only while its Quick Share receive UI is active;
-/// the caller should keep browsing instead of treating an initially empty set
-/// as proof that no Android peer exists.
+/// Browses the public Quick Share DNS-SD service.
 public final class QuickShareDiscovery {
-    /// Called on the discovery queue whenever the discovered peer set changes.
     public var onChange: (([QuickSharePeer]) -> Void)?
     public var onFailure: ((Error) -> Void)?
 
@@ -159,9 +140,6 @@ public final class QuickShareDiscovery {
                   let endpoint = QuickShareEndpointInfo(txtRecordValue: value)
             else { continue }
 
-            // The service instance is a base64 URL string, so it is safe to
-            // use as the pre-resolution key and is stable for this advertising
-            // session. Never use a peer's display name as an identifier.
             let key = result.endpoint.debugDescription
             seen.insert(key)
             let peer = QuickSharePeer(
@@ -172,9 +150,6 @@ public final class QuickShareDiscovery {
                 qrCodeData: endpoint.qrCodeData,
                 advertisingIdentity: endpoint.advertisingIdentity
             )
-            // A QR activation can update the TXT record on an existing
-            // Bonjour service instead of creating a second service. Publish
-            // that new token immediately so the QR session can connect.
             if peers[key] != peer {
                 peers[key] = peer
                 changed = true

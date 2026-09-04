@@ -16,11 +16,6 @@ import android.widget.TextView
 import dev.easyshare.companion.R
 import dev.easyshare.companion.net.CompanionReceiverService
 
-/**
- * The human-facing approval ceremony. Notification content opens this screen
- * when the app is backgrounded; it opens directly while the companion is in
- * use, so approvals never have to be performed in a tiny notification action.
- */
 class ApprovalActivity : Activity() {
     private lateinit var session: String
     private lateinit var approvalAction: String

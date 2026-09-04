@@ -3,28 +3,7 @@ import CoreImage
 import EasyShareKit
 import UniformTypeIdentifiers
 
-/// The Finder Share menu entry point.
-///
-/// This class is named as `NSExtensionPrincipalClass` in Info.plist. macOS
-/// instantiates it inside a short-lived, sandboxed process when the user picks
-/// "Easy Share" from a Share menu.
-///
-/// Three constraints shape everything here:
-///
-/// 1. **The process is short-lived.** As soon as you call
-///    `completeRequest`/`cancelRequest`, macOS may tear you down. Do NOT start a
-///    transfer and then complete the request — the upload dies mid-flight.
-///    Either hold the extension open for the duration (what this scaffold does),
-///    or hand off to the container app via an XPC service or a URL scheme.
-///
-/// 2. **The sandbox is tight.** The extension gets read access to exactly the
-///    URLs handed to it in the `NSItemProvider`s, and nothing else. It needs its
-///    own `com.apple.security.network.client` entitlement — the container app's
-///    entitlements do not apply here.
-///
-/// 3. **Discovery is best-effort.** A paired Android companion is the normal
-///    route; stock Quick Share and its QR handoff remain available as a
-///    compatibility fallback when the companion is not enabled.
+/// Finder share extension controller.
 final class ShareViewController: NSViewController {
 
     private struct PreparedFile {
@@ -33,18 +12,9 @@ final class ShareViewController: NSViewController {
         let name: String
         let size: Int64
         let mimeType: String
-        /// A folder is staged as a ZIP in the extension's temporary directory.
-        /// Regular files are uploaded from the URL supplied by the item provider.
         let isTemporaryArchive: Bool
     }
 
-    /// Where the sender flow currently is.
-    ///
-    /// Every control on screen is a function of this value and nothing else.
-    /// The previous version inferred its state from the text on a button —
-    /// `if cancelButton.title == "Done"` — which meant the flow could only ever
-    /// be as correct as that string, and any new state needed another string to
-    /// compare against.
     fileprivate enum Destination: Identifiable, Equatable {
         case companion(CompanionPeer, pairedRecord: StoredCompanion?)
         case nearby(QuickSharePeer)
@@ -93,9 +63,6 @@ final class ShareViewController: NSViewController {
             }
         }
 
-        /// A remembered name is only a preference, never a stored network
-        /// address or identity. It becomes sendable only after this share
-        /// session has a live Quick Share advertisement to bind it to.
         var resolvedPeer: QuickSharePeer? {
             switch self {
             case .nearby(let peer): return peer
@@ -113,12 +80,7 @@ final class ShareViewController: NSViewController {
         }
     }
 
-    /// A local convenience label, not a Quick Share trust relationship. Stock
-    /// Everyone advertisements use ephemeral endpoints, so keeping an IP,
-    /// port, QR URL, or prior UKEY2 state would be both unreliable and unsafe.
-    /// The optional marker is the public opaque value from the last QR-backed
-    /// advertisement; it disambiguates current anonymous receivers but is not
-    /// a credential and may rotate.
+    /// A local Quick Share label, resolved only to a current advertisement.
     fileprivate struct SavedRecipient: Codable, Identifiable, Equatable {
         let id: String
         let displayName: String
@@ -134,10 +96,8 @@ final class ShareViewController: NSViewController {
         case connecting(Destination)
         case sending(Destination, fileIndex: Int, fraction: Double)
         case finished(Destination)
-        /// `retry` is the peer to try again, when trying again could work.
         case failed(message: String, retry: Destination?)
 
-        /// Whether the peer list should still accept a click.
         var allowsPeerSelection: Bool {
             switch self {
             case .choosing, .searching, .failed: return true
@@ -190,7 +150,6 @@ final class ShareViewController: NSViewController {
         let root = AppearanceObservingView(frame: NSRect(x: 0, y: 0, width: 460, height: 440))
         root.onAppearanceChange = { [weak self] in self?.applyThemeColors() }
 
-        // --- Header ---------------------------------------------------------
         fileIcon.imageScaling = .scaleProportionallyUpOrDown
         fileIcon.image = NSImage(named: "ShareIcon")
         NSLayoutConstraint.activate([
@@ -220,7 +179,6 @@ final class ShareViewController: NSViewController {
         header.alignment = .centerY
         header.spacing = 12
 
-        // --- Peer list ------------------------------------------------------
         table.headerView = nil
         table.rowHeight = 46
         table.style = .inset
@@ -234,7 +192,6 @@ final class ShareViewController: NSViewController {
         table.dataSource = self
         table.delegate = self
         table.target = self
-        // Double-click sends, for anyone who treats a list like a Finder window.
         table.doubleAction = #selector(primaryAction)
 
         let scroll = NSScrollView()
@@ -288,7 +245,6 @@ final class ShareViewController: NSViewController {
             quickShareQRCodeCaption.widthAnchor.constraint(equalTo: listContainer.widthAnchor, constant: -32),
         ])
 
-        // --- Status ---------------------------------------------------------
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
@@ -322,7 +278,6 @@ final class ShareViewController: NSViewController {
         uploadProgress.isHidden = true
         uploadProgress.controlSize = .small
 
-        // --- Buttons --------------------------------------------------------
         cancelButton.target = self
         cancelButton.action = #selector(cancelPressed)
         cancelButton.keyEquivalent = "\u{1b}"          // Esc
@@ -342,7 +297,6 @@ final class ShareViewController: NSViewController {
         buttons.alignment = .centerY
         buttons.spacing = 10
 
-        // --- Assembly -------------------------------------------------------
         let content = NSStackView()
         content.orientation = .vertical
         content.alignment = .leading
@@ -384,11 +338,7 @@ final class ShareViewController: NSViewController {
         }
     }
 
-    /// CGColor does not follow the system appearance the way an NSColor does. A
-    /// border, background, or status tint set once stays wrong on a sheet whose
-    /// appearance changes, so every appearance-derived layer color is reapplied
-    /// whenever the effective appearance changes. `render()` recomputes the
-    /// status card's tint from the current phase as a side effect.
+    /// Reapply layer colors after an appearance change.
     private func applyThemeColors() {
         listContainer.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
         listContainer.layer?.borderColor = NSColor.separatorColor.cgColor
@@ -407,7 +357,6 @@ final class ShareViewController: NSViewController {
 
     // MARK: - Rendering
 
-    /// The single place any control's appearance is decided.
     private func render() {
         switch phase {
         case .preparing:
@@ -503,12 +452,6 @@ final class ShareViewController: NSViewController {
         ).cgColor
     }
 
-    /// Progress across the whole transfer, not the current file.
-    ///
-    /// Per-file percentages restart from zero on every file, so a ten-file
-    /// transfer shows a bar that fills and resets ten times and tells the user
-    /// nothing about how long is left. Weighted by byte count because the files
-    /// are rarely the same size.
     private func overallFraction(fileIndex: Int, fraction: Double) -> Double {
         guard totalBytes > 0 else { return 0 }
         let completed = files.prefix(fileIndex).reduce(Int64(0)) { $0 + $1.size }
@@ -542,9 +485,6 @@ final class ShareViewController: NSViewController {
         let size = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
         if files.count == 1, let file = files.first {
             filesLabel.stringValue = "\(file.name) • \(size)"
-            // The type icon, not the file's own icon: resolving a custom icon
-            // would touch the file, and the sandbox has handed us read access to
-            // exactly these URLs for exactly as long as we hold the scope.
             if let type = file.type {
                 fileIcon.image = NSWorkspace.shared.icon(for: type)
             }
@@ -561,9 +501,7 @@ final class ShareViewController: NSViewController {
     }
 
     private func makePreparedFile(_ url: URL) throws -> PreparedFile {
-        // Folder packaging happens while the extension still owns the source
-        // item's security scope. Deferring it until upload would let the scope
-        // disappear while FileManager is traversing the folder.
+        // Archive folders while their security-scoped URLs are accessible.
         let accessed = url.startAccessingSecurityScopedResource()
         defer {
             if accessed { url.stopAccessingSecurityScopedResource() }
@@ -603,9 +541,7 @@ final class ShareViewController: NSViewController {
         )
     }
 
-    /// v1 carries folders as ordinary ZIP files. Keeping the folder's root in
-    /// the archive makes extracting `Photos.zip` produce `Photos/`, rather
-    /// than scattering its contents into whichever directory the user picked.
+    /// Archives a folder under its root directory.
     private func makeFolderArchive(from folder: URL) throws -> PreparedFile {
         let archiveName = folder.lastPathComponent + ".zip"
         let archive = FileManager.default.temporaryDirectory
@@ -631,8 +567,6 @@ final class ShareViewController: NSViewController {
                 isTemporaryArchive: true
             )
         } catch {
-            // A partially produced archive may be large. Do not leave it in
-            // the extension's temporary directory when packaging fails.
             try? FileManager.default.removeItem(at: archive)
             throw error
         }
@@ -669,17 +603,11 @@ final class ShareViewController: NSViewController {
         quickShareDiscovery.start()
         self.quickShareDiscovery = quickShareDiscovery
 
-        // The QR route is a deliberate destination, not a discovered device,
-        // so make it available immediately even on a network with no mDNS
-        // traffic yet.
         replaceDestinations()
 
         let noPeers = DispatchWorkItem { [weak self] in
             guard let self, self.quickSharePeers.isEmpty else { return }
             if case .searching = self.phase {
-                // A QR handoff remains usable even when ordinary discovery is
-                // silent, so transition to the selectable picker rather than
-                // presenting an empty-list error.
                 self.phase = .choosing
             }
         }
@@ -692,8 +620,6 @@ final class ShareViewController: NSViewController {
         if let session = quickShareQRCodeSession,
            case .awaitingQuickShareQRCode = phase,
            let peer = discoveredPeers.lazy.compactMap({ session.resolvedPeer(from: $0) }).first {
-            // Keep this session in the sender for its ownership signature;
-            // clear only the waiting reference after finding the matching peer.
             quickShareQRCodeSession = nil
             quickShareQRCodeTimeout?.cancel()
             quickShareQRCodeTimeout = nil
@@ -708,9 +634,6 @@ final class ShareViewController: NSViewController {
     }
 
     private func replaceDestinations() {
-        // Preserve the selection across a refresh: discovery republishes the
-        // whole list every few seconds, and a picker that deselects itself
-        // under the pointer is unusable.
         let selected = selectedDestination?.id
         let companions = companionPeers.sorted {
             $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
@@ -725,9 +648,7 @@ final class ShareViewController: NSViewController {
         }
         let anonymousPeers = quickSharePeers.filter { !$0.hasDisplayName }
         var matchedPeerIDs = Set<String>()
-        // Stock Quick Share's anonymous advertisements are intentionally
-        // ephemeral. Do not turn an old UI label into a pretend pairing; the
-        // companion rows above are the only durable destinations.
+        // Anonymous Quick Share recipients are never persisted.
         let saved: [Destination] = []
         let otherNearby = namedPeers
             .filter { !matchedPeerIDs.contains($0.id) }
@@ -745,10 +666,7 @@ final class ShareViewController: NSViewController {
         render()
     }
 
-    /// Hidden Quick Share advertisements carry no name, so their addresses
-    /// are not a reliable way to identify the user's phone. Retain them in the
-    /// discovery result for QR-token matching, but never make an anonymous row
-    /// that asks the user to guess among identical devices.
+    /// Keeps anonymous peers for QR resolution without listing them.
     private var selectableQuickSharePeers: [QuickSharePeer] {
         quickSharePeers.filter(\.hasDisplayName)
     }
@@ -779,8 +697,6 @@ final class ShareViewController: NSViewController {
         case .saved(_, let peer?):
             sendQuickShare(to: peer)
         case .saved:
-            // The disabled row is not normally selectable. Keep this branch
-            // defensive in case a table refresh races a click.
             phase = .failed(
                 message: "Open Quick Share on the saved phone, then try again.", retry: nil
             )
@@ -807,9 +723,6 @@ final class ShareViewController: NSViewController {
                     self.replaceDestinations()
                 }
                 let stored = credentials.record
-                // The just-issued token is already in hand. Use it for this
-                // first send rather than re-querying Keychain while the share
-                // extension is still completing its pairing transaction.
                 await MainActor.run { self.sendCompanion(to: peer, record: stored, token: credentials.token) }
             } catch {
                 await MainActor.run {
@@ -822,9 +735,7 @@ final class ShareViewController: NSViewController {
         }
     }
 
-    /// The only trust ceremony for a new companion. The number comes from the
-    /// actual TLS certificate, not from Bonjour. Android independently derives
-    /// it and requires its own Approve action before releasing a pairing token.
+    /// Pair using a code derived from the live TLS certificate.
     @MainActor
     private func confirmPairingCode(_ code: String, peerName: String) -> Bool {
         let alert = NSAlert()
@@ -844,8 +755,6 @@ final class ShareViewController: NSViewController {
         sendCompanion(to: peer, record: record, token: token)
     }
 
-    /// The first transfer after pairing already owns the freshly issued token;
-    /// subsequent transfers fetch the same credential from Keychain above.
     private func sendCompanion(to peer: CompanionPeer, record: StoredCompanion, token: Data) {
         phase = .connecting(.companion(peer, pairedRecord: record))
         transferTask = Task { [weak self] in
@@ -1022,9 +931,6 @@ final class ShareViewController: NSViewController {
         UserDefaults.standard.set(data, forKey: savedRecipientsKey)
     }
 
-    /// Retrying a declined transfer or one rejected for lack of storage would
-    /// only repeat the same result. A dropped LAN connection often succeeds on
-    /// the next attempt, so retain the selected Quick Share destination there.
     private static func isWorthRetrying(_ error: Error) -> Bool {
         if let error = error as? CompanionError {
             switch error {
@@ -1099,13 +1005,6 @@ final class ShareViewController: NSViewController {
         return name.isEmpty ? "Mac" : name
     }
 
-    /// Pull file URLs out of the extension context.
-    ///
-    /// Every attachment is an `NSItemProvider`, and each may or may not be able
-    /// to vend a file URL. Text-only shares and shares from apps that only offer
-    /// in-memory data will not, which is why this filters rather than assumes.
-    /// The extension's activation rule limits the system UI to attachment/file
-    /// shares; the runtime check remains necessary because providers vary.
     private func resolveAttachments() async -> [URL] {
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else { return [] }
 
@@ -1113,8 +1012,6 @@ final class ShareViewController: NSViewController {
         for item in items {
             for provider in item.attachments ?? [] {
                 guard provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else {
-                    // Quick Share accepts files; providers that expose only
-                    // in-memory text are intentionally not materialized here.
                     continue
                 }
                 if let url = await loadFileURL(from: provider) {
@@ -1133,8 +1030,6 @@ final class ShareViewController: NSViewController {
                     continuation.resume(returning: nil)
                     return
                 }
-                // The item arrives as Data holding a bookmark-ish URL encoding,
-                // or occasionally as a URL directly. Handle both.
                 switch item {
                 case let url as URL:
                     continuation.resume(returning: url)
@@ -1166,11 +1061,8 @@ final class ShareViewController: NSViewController {
         cancel()
     }
 
-    /// Call ONLY after every upload has finished. See constraint 1.
+    /// Completes the extension only after the transfer reaches a terminal state.
     private func finish() {
-        // At this point no upload can still be reading a staged folder archive.
-        // Keep it through failures for Try Again, but remove it as soon as the
-        // successfully completed share sheet is dismissed.
         cleanUpTemporaryArchives()
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
@@ -1211,9 +1103,6 @@ extension ShareViewController: NSTableViewDataSource, NSTableViewDelegate {
         return view
     }
 
-    /// This also locks the list once a transfer starts. `isEnabled` on
-    /// an NSTableView does not stop selection, so relying on it would leave the
-    /// highlight moving off the device the bytes are actually going to.
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         guard phase.allowsPeerSelection else { return false }
         return orderedPeers.indices.contains(row) && orderedPeers[row].isReadyToSend
@@ -1224,10 +1113,6 @@ extension ShareViewController: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-/// One row of the peer list: device icon, name, and where it is.
-///
-/// The address is not decoration. Two Macs on a network are routinely called the
-/// same thing, and it is the only thing on screen that tells them apart.
 private final class PeerRowView: NSTableCellView {
 
     private let icon = NSImageView()
@@ -1272,9 +1157,6 @@ private final class PeerRowView: NSTableCellView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     func configure(with destination: ShareViewController.Destination) {
-        // SF Symbols has no Android glyph. `iphone` is a bare rounded-rectangle
-        // handset outline, so it reads as "a phone" rather than as one
-        // particular brand of phone — the closest honest option available.
         icon.image = NSImage(systemSymbolName: destination.iconName, accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: 17, weight: .regular))
 
@@ -1288,10 +1170,6 @@ private final class PeerRowView: NSTableCellView {
     }
 }
 
-/// Relays appearance changes to the view controller.
-///
-/// `viewDidChangeEffectiveAppearance` is an `NSView` callback; `NSViewController`
-/// has no equivalent, so the root view has to forward it.
 private final class AppearanceObservingView: NSView {
     var onAppearanceChange: (() -> Void)?
 
@@ -1303,9 +1181,6 @@ private final class AppearanceObservingView: NSView {
 
 // MARK: - Brand
 
-/// Easy Share's palette, shared with the Android companion so both ends of a
-/// transfer look like one product. Each color adapts with the sheet's
-/// effective appearance the same way a system color would.
 private enum Brand {
     static let primary = dynamic(
         light: NSColor(srgbRed: 0.192, green: 0.361, blue: 0.961, alpha: 1),
@@ -1333,14 +1208,7 @@ private enum Brand {
 
 // MARK: - Folder archive writer
 
-/// A tiny ZIP writer for the Finder extension.
-///
-/// `Process` is not a viable way to call `ditto` from an app extension: the
-/// extension sandbox is intentionally not a general process launcher. This
-/// writer stores files without compression, which keeps memory bounded and
-/// makes folder contents travel through the same streamed upload path as any
-/// other file. It emits ZIP64 only when an archive actually needs it, so normal
-/// folders remain ordinary, broadly compatible ZIP files.
+/// Streams folders into standard ZIP archives.
 private enum FolderArchiveWriter {
     private enum EntryKind: Equatable { case file, directory }
 
@@ -1449,8 +1317,6 @@ private enum FolderArchiveWriter {
         let values = try source.resourceValues(forKeys: [
             .isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey,
         ])
-        // Links can escape the granted folder or loop back into it. A portable
-        // folder archive has no useful representation for a symlink anyway.
         guard values.isSymbolicLink != true else { return }
 
         if values.isDirectory == true {
@@ -1467,8 +1333,6 @@ private enum FolderArchiveWriter {
         }
 
         guard values.isRegularFile == true, let fileSize = values.fileSize, fileSize >= 0 else {
-            // Devices, sockets, and special filesystem nodes cannot be encoded
-            // meaningfully as a folder share. Ignore them like Finder does.
             return
         }
         entries.append(SourceEntry(source: source, path: path, kind: .file, size: UInt64(fileSize)))

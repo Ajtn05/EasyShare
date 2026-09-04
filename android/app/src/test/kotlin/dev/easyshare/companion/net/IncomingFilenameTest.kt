@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Keep these cases in sync with macos/Sources/SelfTest/main.swift. */
 class IncomingFilenameTest {
     @Test fun hostileNamesBecomeSingleVisibleComponents() {
         assertEquals("photo.jpg", IncomingFilename.sanitize("photo.jpg"))

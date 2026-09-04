@@ -122,9 +122,6 @@ do {
 
 // MARK: - Loopback transport
 
-/// This covers the actual TCP state machines, including the final safe-
-/// disconnect exchange. A physical Android test remains necessary for stock
-/// Quick Share interoperability.
 private struct LoopbackSnapshot: Sendable {
     var acceptedOffer: QuickShareIncomingOffer?
     var received: [URL]

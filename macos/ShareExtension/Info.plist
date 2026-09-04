@@ -4,7 +4,6 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<!-- Finder uses this as the user-facing Sharing service name. -->
 	<key>CFBundleDisplayName</key>
 	<string>Easy Share</string>
 	<key>CFBundleExecutable</key>
@@ -17,16 +16,11 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
-	<!-- Both come from build settings in project.yml, which the repo-root
-	     VERSION file and scripts/check-version.sh keep honest. Do not
-	     hardcode them here again: a literal silently overrides the
-	     setting and ships the wrong number. -->
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<!-- The share extension has its own process and therefore its own local
-	     network declaration; the container's Info.plist is not enough. -->
+	<!-- The extension needs its own local-network declaration. -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Easy Share uses your local network to send files to your paired Android companion or Android Quick Share.</string>
 	<key>NSBonjourServices</key>
@@ -42,10 +36,7 @@
 		<string>com.apple.share-services</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Finder supplies selected files as public.file-url/public.url item
-			     providers. The declarative file key registers correctly but is
-			     not matched by Finder on current macOS; use its native predicate
-			     form and keep the rule strictly limited to file URLs. -->
+			<!-- Finder matches selected file URLs through this predicate. -->
 			<key>NSExtensionActivationRule</key>
 			<string>SUBQUERY(
     extensionItems,

@@ -1,22 +1,5 @@
-# XcodeGen spec. Generates EasyShare.xcodeproj from this file.
-#
-#   brew install xcodegen
-#   cd macos && xcodegen generate && open EasyShare.xcodeproj
-#
-# Why XcodeGen rather than a checked-in .xcodeproj: a project.pbxproj is a 2000-
-# line generated file that cannot be reviewed or merged sensibly, and it could
-# not be produced or validated on the machine this was scaffolded on (no Xcode).
-# This file is the source of truth; regenerate rather than editing the project
-# in Xcode's UI, or the two will drift.
-#
-# DO NOT add `info:` or `entitlements:` blocks to these targets.
-#
-# Those keys do not mean "use the plist at this path" — they mean "GENERATE a
-# plist at this path", and XcodeGen writes a stub over whatever was there. Doing
-# it once silently emptied the app's Bonjour declaration and the extension's
-# entire NSExtension dictionary. Nothing failed to build, but discovery and the
-# Finder Share entry both disappeared. Point the build settings below at the
-# hand-written files instead.
+# XcodeGen source for EasyShare.xcodeproj.
+# Keep target plists and entitlements hand-written; XcodeGen generates those files.
 
 name: EasyShare
 options:
@@ -25,31 +8,7 @@ options:
     macOS: "13.0"
   createIntermediateGroups: true
 
-# Signing lives here, at project level, and NOT on the individual targets.
-#
-# The app embeds the extension, and macOS requires both to be signed by the same
-# certificate. Setting the team per-target lets the two drift apart, which is
-# what Xcode's Signing & Capabilities editor does by default: it writes the team
-# onto the one target you had selected. The app then signs with your certificate,
-# the extension signs with nothing, and the build fails with "Embedded binary is
-# not signed with the same certificate as the parent app" — which points at the
-# extension, when the actual problem is that only one of the two was told who you
-# are.
-#
-# The team id itself is NOT in this file. It lives in Signing.xcconfig, which is
-# tracked and ships a blank DEVELOPMENT_TEAM, and which optionally includes an
-# untracked Signing.local.xcconfig holding your own id:
-#
-#     echo 'DEVELOPMENT_TEAM = ABCDE12345' > macos/Signing.local.xcconfig
-#
-#     security find-certificate -c "Apple Development" -p |
-#       openssl x509 -noout -subject     # the team id is the OU field
-#
-# The keys have to be in the xcconfig and NOT in a `settings: base:` block here.
-# XcodeGen writes `settings` straight into the build configuration, and a build
-# setting set on the configuration overrides the xcconfig it is based on — so
-# leaving DEVELOPMENT_TEAM in `settings.base` would silently win over both
-# Signing.xcconfig and anyone's Signing.local.xcconfig.
+# Project-level signing keeps the app and embedded extension on one identity.
 configFiles:
   Debug: Signing.xcconfig
   Release: Signing.xcconfig
@@ -65,7 +24,6 @@ targets:
     platform: macOS
     sources:
       - path: App
-        # Referenced by build settings, not copied into Resources.
         excludes:
           - Info.plist
           - EasyShare.entitlements
@@ -73,15 +31,13 @@ targets:
       - package: EasyShareKit
         product: EasyShareKit
       - target: EasyShareExtension
-        embed: true          # the .appex must be copied into Contents/PlugIns
+        embed: true
     settings:
       base:
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/EasyShare.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: dev.easyshare.app
-        # App/Assets.xcassets is generated — see Tools/make-icons.swift.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Must equal the repo-root VERSION file; scripts/check-version.sh enforces it.
         MARKETING_VERSION: "0.5.1"
         CURRENT_PROJECT_VERSION: "5"
         SWIFT_VERSION: "5.0"
@@ -103,12 +59,7 @@ targets:
       base:
         INFOPLIST_FILE: ShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: ShareExtension/EasyShareExtension.entitlements
-        # MUST be a child of the app's bundle id, or macOS refuses to load it.
         PRODUCT_BUNDLE_IDENTIFIER: dev.easyshare.app.ShareExtension
-        # No APPICON here on purpose: an .appex has no icon of its own, it
-        # inherits the container app's. The catalog carries the header artwork
-        # the picker draws, which the extension cannot read out of the app.
-        # Must equal the repo-root VERSION file; scripts/check-version.sh enforces it.
         MARKETING_VERSION: "0.5.1"
         CURRENT_PROJECT_VERSION: "5"
         SWIFT_VERSION: "5.0"

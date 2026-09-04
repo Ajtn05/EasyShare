@@ -1,18 +1,5 @@
 #!/bin/sh
-# Fails if macos/project.yml's MARKETING_VERSION has drifted from the root
-# VERSION file.
-#
-#     scripts/check-version.sh            # drift check only
-#     scripts/check-version.sh v0.5.1     # also require the tag to match
-#
-# The release workflow passes the tag it was triggered by, so a mistyped tag
-# cannot publish a mislabelled build.
-#
-# VERSION is the single source of the marketing version. Android reads it at
-# configuration time (android/app/build.gradle.kts), but XcodeGen has no way to
-# read a file, so macos/project.yml carries the literal and this check keeps the
-# two honest. Build numbers are NOT covered here: CURRENT_PROJECT_VERSION and
-# Android's versionCode are bumped by hand and are allowed to differ.
+# Verifies the macOS marketing version against VERSION and an optional release tag.
 
 set -eu
 

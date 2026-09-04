@@ -1,8 +1,4 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Light appearance. The dark counterpart lives in values-night/themes.xml
-         so system-drawn widgets (the approval-style Switch) follow the phone the
-         way the hand-drawn palette in Theme.kt does. Window and bar colours are
-         set in code from that palette. -->
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>

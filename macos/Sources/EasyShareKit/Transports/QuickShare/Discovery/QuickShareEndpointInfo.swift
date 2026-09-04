@@ -1,28 +1,17 @@
 import Foundation
 import Network
 
-/// The compact endpoint information carried in Quick Share's Bonjour TXT `n`
-/// value and in a connection request. Unlike EasyShare discovery, it does not
-/// contain a certificate or a stable peer identity; Everyone visibility is
-/// intentionally anonymous.
+/// Endpoint data carried in Quick Share discovery and connection requests.
 struct QuickShareEndpointInfo {
     static let serviceType = "_FC9F5ED42C8A._tcp"
     private static let serviceID: [UInt8] = [0xFC, 0x9F, 0x5E]
 
     let endpointID: String
     let displayName: String
-    /// `false` means the peer intentionally withheld its name. Such a peer is
-    /// usable only through a QR session that identifies its advertised token.
     let hasDisplayName: Bool
-    /// Present only after an Android device has scanned a Quick Share QR
-    /// session. It is an untrusted discovery token, not a credential.
     let qrCodeData: Data?
     private let opaqueIdentityBytes: Data
 
-    /// A public Everyone advertisement includes 16 opaque bytes after its
-    /// visibility flags. They are not a credential or a durable Quick Share
-    /// pairing identity, but retaining them lets a local UI preference bind a
-    /// previously QR-confirmed phone to its current anonymous advertisement.
     var advertisingIdentity: Data { opaqueIdentityBytes }
 
     init(endpointID: String, displayName: String) throws {
@@ -56,8 +45,6 @@ struct QuickShareEndpointInfo {
     }
 
     func serialized() -> Data {
-        // version=0, visibility=Everyone, type=laptop (3 << 1); the next 16
-        // bytes are opaque on the unauthenticated Everyone path.
         var data = Data([0x06])
         data.append(opaqueIdentityBytes)
         let utf8 = Array(displayName.utf8.prefix(255))
@@ -85,9 +72,6 @@ struct QuickShareEndpointInfo {
     }
 
     private static func parse(_ data: Data) -> Parsed? {
-        // One flags byte followed by 16 opaque identity bytes. Public devices
-        // then have a name, while QR-triggered hidden receivers instead begin
-        // their TLV list immediately at byte 17.
         guard data.count >= 17 else { return nil }
         let hidden = (data[0] & 0x10) != 0
         let advertisingIdentity = Data(data[1..<17])
@@ -95,10 +79,6 @@ struct QuickShareEndpointInfo {
         let displayName: String
         let hasDisplayName: Bool
         if hidden || offset == data.count {
-            // Some current Android builds publish an anonymous 17-byte
-            // endpoint-info value. It has neither a name nor a QR TLV, but is
-            // still a valid service record and must not poison the browser's
-            // state for the next QR-activated advertisement.
             displayName = "Quick Share device"
             hasDisplayName = false
         } else {
@@ -111,11 +91,6 @@ struct QuickShareEndpointInfo {
                 hasDisplayName = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 offset = nameEnd
             } else {
-                // A few Android versions omit the visibility bit while still
-                // omitting the clear-text name for a QR handoff. In that
-                // layout byte 17 is the first TLV type (normally 1), not a
-                // name length. Treat it as anonymous and let the TLV parser
-                // below authenticate the QR advertising token.
                 displayName = "Quick Share device"
                 hasDisplayName = false
             }

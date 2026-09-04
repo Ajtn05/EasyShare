@@ -16,26 +16,16 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<!-- Both come from build settings in project.yml, which the repo-root
-	     VERSION file and scripts/check-version.sh keep honest. Do not
-	     hardcode them here again: a literal silently overrides the
-	     setting and ships the wrong number. -->
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<!-- Accessory app: no Dock tile and no menu bar of its own, just the status
-	     item. AppDelegate's class documentation has always described the app
-	     this way; without this key it was not one, and it launched with a Dock
-	     icon and an empty application menu. -->
 	<key>LSUIElement</key>
 	<true/>
-	<!-- Required before macOS will show the local-network consent prompt. -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Easy Share uses your local network to receive files from Android Quick Share.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<!-- Android Quick Share's LAN receiver/sender discovery service. -->
 		<string>_FC9F5ED42C8A._tcp</string>
 	</array>
 </dict>

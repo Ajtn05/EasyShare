@@ -30,14 +30,8 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 
-/**
- * An opt-in, foreground-only receiver for Macs that have been paired locally.
- * It never accepts an offer without a notification approval and it advertises
- * only after the TLS listener is bound to its ephemeral port.
- */
+/** Foreground receiver for locally paired Macs. */
 class CompanionReceiverService : Service() {
-    // One worker stays in accept(); the permits limit expensive, unauthenticated
-    // TLS handshakes and approval waits to the remaining workers.
     private val workers = Executors.newFixedThreadPool(MAX_CONCURRENT_CONNECTIONS + 1)
     private val connectionPermits = Semaphore(MAX_CONCURRENT_CONNECTIONS)
     private val activeSockets = ConcurrentHashMap.newKeySet<SSLSocket>()
@@ -87,8 +81,6 @@ class CompanionReceiverService : Service() {
         if (receiving) return
         restorePairingWindow()
         createChannels()
-        // Android requires the foreground notification immediately after a user
-        // starts a data-transfer service; this is not a stealth background listener.
         startForeground(READY_NOTIFICATION_ID, readyNotification())
         try {
             val socket = CompanionIdentity.tlsContext(this).serverSocketFactory.createServerSocket() as SSLServerSocket
@@ -206,8 +198,6 @@ class CompanionReceiverService : Service() {
                 }
             } catch (error: Exception) {
                 recordDiagnostic("Secure connection failed: ${describe(error)}")
-                // The peer gets a concise protocol failure when the TLS stream is
-                // still writable. Never surface hostile data in a notification.
                 runCatching { fail(peer.outputStream, error.message ?: "Connection failed") }
             }
         }
@@ -281,7 +271,6 @@ class CompanionReceiverService : Service() {
         }
     }
 
-    /** Keep every MediaStore row pending until every advertised file was fully written. */
     private fun receiveFiles(input: java.io.InputStream, files: List<CompanionProtocol.FileMeta>) {
         val resolver = contentResolver
         val staged = mutableListOf<StagedFile>()
@@ -289,7 +278,6 @@ class CompanionReceiverService : Service() {
             files.forEach { meta -> staged += stageFile(input, meta) }
             staged.forEach { it.publish() }
         } catch (error: Exception) {
-            // A later file failing must not leave an earlier staged file exposed.
             staged.forEach { file -> runCatching { resolver.delete(file.uri, null, null) } }
             throw error
         }
@@ -329,11 +317,6 @@ class CompanionReceiverService : Service() {
         }
     }
 
-    /**
-     * A custom destination is a Storage Access Framework document tree chosen
-     * by the user. Its provider owns visibility, so it has no MediaStore
-     * pending flag; if this batch fails, every created document is deleted.
-     */
     private fun stageDocument(
         input: java.io.InputStream,
         meta: CompanionProtocol.FileMeta,
@@ -455,10 +438,6 @@ class CompanionReceiverService : Service() {
         )
 
     private fun action(label: String, operation: String, session: String): Notification.Action {
-        // Directly re-enter the existing foreground service. Routing this via
-        // a background BroadcastReceiver can be deferred by recent Android
-        // releases, which leaves the Mac waiting for an approval it never
-        // receives.
         val intent = Intent(this, CompanionReceiverService::class.java).apply {
             action = operation
             putExtra(EXTRA_SESSION, session)
@@ -529,7 +508,6 @@ class CompanionReceiverService : Service() {
         statePreferences(this).edit().putString(DIAGNOSTIC_KEY, text).apply()
     }
 
-    /** A deliberate retry should report its current state, not a prior attempt. */
     private fun clearDiagnostic() {
         statePreferences(this).edit().remove(DIAGNOSTIC_KEY).apply()
     }

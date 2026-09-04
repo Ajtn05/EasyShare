@@ -2,9 +2,7 @@ import CryptoKit
 import Foundation
 import SwiftProtobuf
 
-/// Implements the P-256/SHA-512 UKEY2 branch Quick Share uses for its LAN
-/// medium. The state machines deliberately take and return serialized protobuf
-/// messages, which preserves the exact bytes UKEY2 binds into its HKDF context.
+/// P-256/SHA-512 UKEY2 for Quick Share's LAN transport.
 public struct QuickShareUKEY2Initiator {
     private let privateKey = P256.KeyAgreement.PrivateKey()
     private var clientInit: Data?
@@ -111,12 +109,7 @@ public struct QuickShareUKEY2Responder {
             throw QuickShareError.malformed("client finish arrived before server init")
         }
         let envelope = try Securegcm_Ukey2Message(serializedBytes: serialized)
-        // UKEY2 requires checking the message type before checking the
-        // ClientFinished commitment. A peer that rejects our ServerInit sends
-        // an Alert here; hashing that alert first disguises its useful error
-        // code as a commitment mismatch and makes an interoperability failure
-        // impossible to diagnose. An alert still always terminates the
-        // handshake -- it is never accepted as a ClientFinished message.
+        // Handle a UKEY2 Alert before checking ClientFinished.
         if envelope.messageType == .alert {
             guard envelope.hasMessageData else {
                 throw QuickShareError.unsupported("Android rejected UKEY2 server init with an empty alert")
@@ -127,10 +120,7 @@ public struct QuickShareUKEY2Responder {
             )
         }
         guard envelope.messageType == .clientFinish, envelope.hasMessageData else {
-            // The numeric type is safe metadata, unlike a peer-provided alert
-            // string or public key. It distinguishes a valid Android alert
-            // from a connection-response or retry frame sent by another
-            // Nearby handshake branch.
+            // Log only the numeric peer frame type.
             throw QuickShareError.malformed(
                 "expected UKEY2 client finish, received message type \(envelope.messageType.rawValue)"
             )

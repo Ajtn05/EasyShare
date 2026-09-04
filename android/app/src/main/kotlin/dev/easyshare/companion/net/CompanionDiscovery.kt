@@ -5,20 +5,13 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import dev.easyshare.companion.crypto.CompanionIdentity
 
-/**
- * Registers only after the TLS listener has chosen its actual port. Registration
- * is process-wide because NsdManager unregistration is asynchronous: a rapid
- * receiver off/on must wait for the old advertisement to disappear before it
- * publishes the replacement.
- */
+/** Publishes the active TLS listener after it has bound an ephemeral port. */
 class CompanionDiscovery(private val context: Context) {
     private val owner = Any()
 
     fun register(port: Int, displayName: String) {
         val fingerprint = CompanionIdentity.fingerprintHex(context)
         val info = NsdServiceInfo().apply {
-            // A stable name lets Bonjour replace a receiver cleanly instead of
-            // presenting EasyShare-xxxx, EasyShare-xxxx (2), and so on.
             serviceName = "EasyShare-${fingerprint.take(12)}"
             serviceType = SERVICE_TYPE
             this.port = port
@@ -56,9 +49,6 @@ class CompanionDiscovery(private val context: Context) {
 
         fun unregister(owner: Any) = synchronized(lock) {
             if (pending?.owner === owner) pending = null
-            // A previous service instance may receive a delayed onDestroy after
-            // the user has already started a fresh receiver. It must never tear
-            // down the new instance's Bonjour record.
             if (activeOwner === owner && activeListener != null && !unregistering) {
                 unregisterActiveLocked()
             }
@@ -77,8 +67,6 @@ class CompanionDiscovery(private val context: Context) {
                             activeListener = null
                             activeOwner = null
                         }
-                        // A superseding receiver request may have arrived while
-                        // this registration was in flight.
                         if (!unregistering) registerPendingLocked()
                     }
                 }

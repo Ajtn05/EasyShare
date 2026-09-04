@@ -1,15 +1,10 @@
 import Foundation
 import SwiftProtobuf
 
-/// The Nearby Connections TCP transport is a sequence of protobuf messages,
-/// each preceded by an unsigned, four-byte, big-endian length. This framing is
-/// deliberately separate from `NWConnection`: it is also used by transcript
-/// tests and makes an oversized peer frame fail before it reaches protobuf.
+/// Four-byte, big-endian framing for Nearby Connections messages.
 public enum QuickShareFraming {
 
-    /// Control frames and file chunks are bounded independently. A peer cannot
-    /// make the receiver allocate an arbitrary amount merely by advertising a
-    /// length in four bytes.
+    /// Independent size caps for control frames and chunks.
     public static let maximumFrameLength = 5 * 1024 * 1024
 
     public static func encode<Message: SwiftProtobuf.Message>(_ message: Message) throws -> Data {
@@ -32,9 +27,6 @@ public enum QuickShareFraming {
         return framed
     }
 
-    /// Decodes exactly one complete frame. Connection code may buffer partial
-    /// reads and call this once all four length bytes and the advertised body
-    /// are available.
     public static func decode(_ framed: Data) throws -> Data {
         guard framed.count >= 4 else { throw QuickShareError.truncatedFrame }
         let prefix = framed.prefix(4)
@@ -57,19 +49,8 @@ public enum QuickShareError: Error, Equatable, Sendable {
     case insufficientSpace
     case cancelled
     case connectionClosed
-    /// The peer closed a real Quick Share session. The stage is deliberately
-    /// user-readable so a device-side generic error can be tied to the
-    /// protocol exchange that immediately preceded it.
     case connectionClosedDuring(String)
-    /// The receiver did not confirm it had drained the final payload before
-    /// the safe-disconnect deadline. A local socket write is not delivery.
     case deliveryConfirmationTimedOut
-    /// A Quick Share endpoint was discovered but did not accept the TCP
-    /// connection promptly. Keeping this distinct from a closed connection
-    /// lets the UI suggest a QR retry instead of leaving a spinner forever.
     case connectionTimedOut
-    /// Scanning a Quick Share QR code must open its `quickshare.google` link
-    /// before Android publishes its temporary LAN endpoint. This is an
-    /// activation timeout, not a transfer timeout.
     case qrCodeActivationTimedOut
 }

@@ -1,18 +1,6 @@
 #!/usr/bin/env swift
-//
-// Regenerates every image in App/Assets.xcassets and
-// ShareExtension/Assets.xcassets.
-//
-//     cd macos && swift Tools/make-icons.swift
-//
-// Why a generator rather than checked-in PNGs: the same mark has to exist at
-// ten pixel sizes in two colour treatments, and hand-exported bitmaps drift the
-// moment one of them is touched. This file is the source of truth for the
-// artwork; the PNGs are build output that happens to be committed so a checkout
-// builds without running this.
-//
-// It deliberately uses only CoreGraphics + ImageIO — no AppKit, no Xcode, no
-// design tool — so it runs anywhere `swift` does.
+// Regenerates App and ShareExtension icon assets.
+// Run with: cd macos && swift Tools/make-icons.swift
 
 import CoreGraphics
 import Foundation
@@ -21,18 +9,10 @@ import UniformTypeIdentifiers
 
 // MARK: - Geometry
 
-/// The mark, drawn in a 100x100 space with y pointing up.
-///
-/// A tray with an arrow leaving through its opening: the same metaphor the
-/// Share menu itself uses, which is where this app is invoked from. It is three
-/// stroked paths and nothing else, because the 16pt slot has to stay readable —
-/// anything with a fill and a counter turns to porridge at that size.
+/// Mark geometry in a normalized 100×100 coordinate space.
 private enum Glyph {
     static let box = CGRect(x: 0, y: 0, width: 100, height: 100)
 
-    /// The open bracket the arrow leaves from. Wide and shallow: raise the
-    /// sides or narrow the span and the mark stops reading as a tray and starts
-    /// reading as a house with a roof.
     static func tray(radius: CGFloat = 13) -> CGPath {
         let path = CGMutablePath()
         path.move(to: CGPoint(x: 18, y: 50))
@@ -42,20 +22,10 @@ private enum Glyph {
         return path
     }
 
-    /// Shaft and head are separate strokes that meet at the tip. Drawing the
-    /// head as a chevron rather than a filled triangle keeps every terminal the
-    /// same weight, which is what stops the mark looking top-heavy when it is
-    /// scaled down.
-    /// The mark with the tray dropped, for the 16pt slot. At 16 pixels the
-    /// tray's two verticals are one pixel each and the counter between them and
-    /// the shaft is less than one, so drawing it costs legibility and buys
-    /// nothing: it renders as a grey smudge under the arrow.
     static func arrowOnlyScale() -> CGFloat { 1.25 }
 
     static func arrow() -> CGPath {
         let path = CGMutablePath()
-        // The shaft stops well clear of the tray floor. Let the two touch and
-        // their round caps fuse into one blob at small sizes.
         path.move(to: CGPoint(x: 50, y: 33))
         path.addLine(to: CGPoint(x: 50, y: 82))
         path.move(to: CGPoint(x: 36, y: 68))
@@ -65,11 +35,6 @@ private enum Glyph {
     }
 }
 
-/// A superellipse — the continuous-corner shape Apple uses for app icons.
-///
-/// `CGPath(roundedRect:)` gives circular corners, which read as visibly
-/// "rounder" than every neighbouring icon in the Dock. Exponent 5 is the usual
-/// match for the platform shape.
 private func squircle(in rect: CGRect, exponent: CGFloat = 5, samples: Int = 720) -> CGPath {
     let path = CGMutablePath()
     let a = rect.width / 2, b = rect.height / 2
@@ -105,8 +70,6 @@ private func makeContext(_ pixels: Int) -> CGContext {
     return context
 }
 
-/// Stroke the mark into `rect`, which is the square the glyph's 100x100 space
-/// maps onto.
 private func strokeGlyph(
     in context: CGContext, rect: CGRect, weight: CGFloat, color glyphColor: CGColor,
     includeTray: Bool = true
@@ -128,21 +91,12 @@ private func strokeGlyph(
     context.restoreGState()
 }
 
-/// The full colour icon: gradient squircle, mark on top.
-///
-/// `detailed` is off for the 16pt and 32pt slots. At those sizes the drop
-/// shadow is a grey smear a pixel wide and the top gloss is invisible, so both
-/// are dropped and the mark is drawn slightly larger and heavier — the standard
-/// optical correction for small icon sizes, and the reason the asset catalog
-/// has separate slots for them at all.
+/// Draws a full-color application icon.
 private func renderAppIcon(pixels: Int, detailed: Bool) -> CGImage {
     let tiny = pixels <= 16
     let context = makeContext(pixels)
     let s = CGFloat(pixels) / 1024
 
-    // The 824pt content square inside a 1024pt canvas, nudged up to leave room
-    // for the shadow. This is the macOS icon grid; ignoring it makes the icon
-    // sit at a different size to everything else in the Dock.
     let plate = CGRect(x: 100 * s, y: 116 * s, width: 824 * s, height: 824 * s)
     let shape = squircle(in: plate)
 
@@ -174,9 +128,6 @@ private func renderAppIcon(pixels: Int, detailed: Bool) -> CGImage {
     )
 
     if detailed {
-        // A highlight across the top third, the way a physical convex surface
-        // catches light. Subtle on purpose: at 6% it reads as depth, at 20% it
-        // reads as a 2010 gel button.
         let gloss = CGGradient(
             colorsSpace: srgb,
             colors: [color(1, 1, 1, 0.16), color(1, 1, 1, 0)] as CFArray,
@@ -196,8 +147,6 @@ private func renderAppIcon(pixels: Int, detailed: Bool) -> CGImage {
     let side = plate.width * fraction * (tiny ? Glyph.arrowOnlyScale() : 1)
     let glyphRect = CGRect(
         x: plate.midX - side / 2,
-        // Arrow-only art has its ink centred on y=57 rather than y=50, so the
-        // box it is drawn in has to sit lower for the mark to look centred.
         y: plate.midY - side / 2 - (tiny ? side * 0.07 : 0),
         width: side, height: side
     )
@@ -208,15 +157,7 @@ private func renderAppIcon(pixels: Int, detailed: Bool) -> CGImage {
     return context.makeImage()!
 }
 
-/// A menu bar template image: black ink and alpha only. macOS recolours it for
-/// light, dark, and the highlighted state — supplying colour here would defeat
-/// that and leave a blue smudge on a black menu bar.
-///
-/// There is deliberately no slashed "not receiving" variant. Every slash angle
-/// tried either lay along the arrowhead's limb or along its shaft, and at 18
-/// points the result was an unreadable tangle rather than a mark with a bar
-/// through it. The off state is shown with `appearsDisabled` on the status
-/// button instead, which is what the platform does for Bluetooth.
+/// Draws a menu-bar template image.
 private func renderMenuBarIcon(pixels: Int) -> CGImage {
     let context = makeContext(pixels)
     let side = CGFloat(pixels) * 0.94
@@ -267,11 +208,9 @@ private let catalogRoot = #"""
 writeJSON(catalogRoot, to: assets.appendingPathComponent("Contents.json"))
 writeJSON(catalogRoot, to: extensionAssets.appendingPathComponent("Contents.json"))
 
-// --- AppIcon -----------------------------------------------------------------
 
 print("AppIcon:")
 
-/// (point size, scale). 16pt and 32pt get the simplified treatment.
 private let iconSlots: [(points: Int, scale: Int)] = [
     (16, 1), (16, 2), (32, 1), (32, 2),
     (128, 1), (128, 2), (256, 1), (256, 2), (512, 1), (512, 2),
@@ -308,10 +247,7 @@ writeJSON(
     to: assets.appendingPathComponent("AppIcon.appiconset/Contents.json")
 )
 
-// --- Menu bar ----------------------------------------------------------------
 
-/// 18pt is the conventional menu bar glyph size. 1x and 2x only: macOS has no
-/// 3x displays, and actool rejects a 3x child in a `mac` image set.
 private func writeMenuBarImageSet(named name: String) {
     print("\(name):")
     var entries: [String] = []
@@ -341,10 +277,6 @@ private func writeMenuBarImageSet(named name: String) {
 
 writeMenuBarImageSet(named: "MenuBarIcon")
 
-// --- Share extension header --------------------------------------------------
-
-// The extension is a separate bundle with a separate catalog; it cannot reach
-// into the container app's. This is the same colour mark at header size.
 print("ShareIcon:")
 var shareEntries: [String] = []
 for scale in 1...2 {

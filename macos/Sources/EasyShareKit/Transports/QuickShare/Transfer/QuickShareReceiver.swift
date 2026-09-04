@@ -17,9 +17,7 @@ public struct QuickShareIncomingOffer: Sendable {
     public let totalSize: Int64
 }
 
-/// Only the app target adopts this protocol. It converts a Quick Share offer
-/// into the same native accept/decline prompt and Downloads presentation used
-/// by EasyShare, without allowing Quick Share wire types into the UI layer.
+/// Delivers Quick Share offers and transfer results to the app layer.
 public protocol QuickShareReceiverDelegate: AnyObject {
     func quickShareReceiverShouldAccept(_ offer: QuickShareIncomingOffer) async -> Bool
     func quickShareReceiverDidReceiveFile(at url: URL, from senderName: String)
@@ -66,8 +64,7 @@ public final class QuickShareReceiver {
             switch state {
             case .ready:
                 guard let listener, let port = listener.port?.rawValue else { return }
-                // Register only after the port is listening. The service name
-                // and TXT record follow the Everyone-visible Wi-Fi LAN format.
+                // Advertise only after the listener is ready.
                 listener.service = NWListener.Service(
                     name: self.endpoint.advertisementName(), type: QuickShareEndpointInfo.serviceType,
                     txtRecord: self.endpoint.txtRecord()
@@ -109,10 +106,6 @@ public final class QuickShareReceiver {
 }
 
 private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable {
-    /// Kept separate from the app's UI logging: a stock Android sender can
-    /// close before it has supplied an offer, so the normal consent UI has no
-    /// transfer to attach an error to. These public phase names make a physical
-    /// interoperability failure diagnosable without exposing peer data.
     private static let logger = Logger(subsystem: "dev.easyshare.app", category: "QuickShareReceiver")
 
     private enum Stage: Equatable {
@@ -248,9 +241,7 @@ private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable 
             let result = try ukey.receiveClientFinish(data)
             codec = QuickShareD2DCodec(keys: result.d2dKeys)
             verificationPIN = result.pin
-            // The receiver/server leads the final plaintext acknowledgement.
-            // Android follows this order, then waits for the initiator's
-            // matching response before either side sends encrypted frames.
+            // The receiver sends the final plaintext acknowledgement first.
             try sendPlainConnectionAcceptance()
             stage = .awaitClientResponse
             Self.logger.debug("Quick Share phase: sent connection acknowledgement")
@@ -288,17 +279,11 @@ private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable 
             }
 
             if disconnection.ackSafeToDisconnect {
-                // The Android sender has confirmed that it received our
-                // request only after it finished putting its final FILE frame
-                // on the wire. The application can now safely regard the
-                // transfer as delivered.
+                // The sender confirmed it drained the final FILE frame.
                 Self.logger.notice("Quick Share delivery confirmation received")
                 closeAfterFlush()
             } else if disconnection.requestSafeToDisconnect {
-                // Some Nearby implementations (including older Android
-                // senders) lead this exchange themselves. Acknowledge that
-                // form too, so mixed versions can complete without either
-                // endpoint waiting indefinitely.
+                // Support sender-initiated safe disconnect.
                 try sendSafeDisconnectionAcknowledgement()
                 Self.logger.notice("Quick Share sender requested delivery confirmation")
                 closeAfterFlush()
@@ -310,22 +295,13 @@ private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable 
         case .bandwidthUpgradeRetry:
             try handleBandwidthUpgradeRetry(frame.v1.bandwidthUpgradeRetry)
         default:
-            // Keep the numeric Nearby frame type in the diagnostic. Android's
-            // transport can negotiate optional media independently of the
-            // sharing layer; knowing the exact type is essential before
-            // deciding whether to decline that negotiation or implement it.
             throw QuickShareError.unsupported(
                 "unsupported encrypted Quick Share frame type \(frame.v1.type.rawValue)"
             )
         }
     }
 
-    /// Android can ask a connected endpoint to refresh the list of media it
-    /// supports for a later bandwidth upgrade. This receiver intentionally
-    /// keeps the original encrypted Wi-Fi LAN channel: it has no Wi-Fi Direct,
-    /// hotspot, Bluetooth, or AWDL upgrade implementation. Replying with an
-    /// explicit empty list is the protocol's way to say so; closing the
-    /// connection made Android report a failure before the PIN prompt.
+    /// Declines optional bandwidth upgrades while retaining the LAN channel.
     private func handleBandwidthUpgradeRetry(
         _ request: Location_Nearby_Connections_BandwidthUpgradeRetryFrame
     ) throws {
@@ -406,12 +382,7 @@ private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable 
             } else if frame.v1.type == .cancel {
                 close(error: QuickShareError.cancelled)
             } else {
-                // Current Android builds can send an optional control frame
-                // (for example progress/binding metadata) before the actual
-                // offer. Google's receiver discards these and keeps reading;
-                // closing here prevented the sender from ever reaching the
-                // PIN/consent step. The encrypted handshake above remains
-                // strict, and we still accept only a valid introduction here.
+                // Ignore non-terminal control frames before the offer.
                 Self.logger.debug("Ignoring pre-offer Quick Share control frame")
             }
 
@@ -419,10 +390,7 @@ private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable 
             if frame.v1.type == .cancel {
                 close(error: QuickShareError.cancelled)
             } else {
-                // After an offer Android may still send harmless sharing-layer
-                // metadata while its own UI is transitioning. It is neither a
-                // file payload nor an authorisation decision, so ignore it;
-                // only the explicit cancel needs action before consent.
+                // Ignore non-terminal control frames while awaiting consent.
                 Self.logger.debug("Ignoring Quick Share control frame while transfer state is unchanged")
             }
 
@@ -553,19 +521,13 @@ private final class QuickShareReceiverConnection: Hashable, @unchecked Sendable 
                 destinations.append(destination)
             }
         } catch {
-            // Anything not moved is still in the temp directory and is removed
-            // by `close`; completed files are valid, never partial.
             throw error
         }
 
         let sender = senderName ?? "Quick Share device"
         for destination in destinations { delegate?.quickShareReceiverDidReceiveFile(at: destination, from: sender) }
         delegate?.quickShareReceiverDidFinishTransfer(from: sender)
-        // The receiver owns the safe-disconnect request: it can make that
-        // request only after its final FILE frame has been completely written
-        // to disk. Recent Android senders wait for this request before they
-        // leave their Sending UI, whereas older senders may send a matching
-        // request of their own. `processEncrypted` accepts either order.
+        // Request safe disconnect only after committing every file.
         if safeDisconnectionEnabled {
             stage = .awaitingSafeDisconnection
             try sendSafeDisconnectionRequest()

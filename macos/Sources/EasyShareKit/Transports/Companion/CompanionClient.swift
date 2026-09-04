@@ -41,10 +41,7 @@ public enum CompanionError: LocalizedError {
     }
 }
 
-/// A short-lived pairing session. The caller displays `comparisonCode`, then
-/// calls `confirm()` only after the human has compared it with Android's local
-/// notification. The certificate captured here, not the mDNS TXT record, is
-/// the certificate that becomes pinned.
+/// A pairing session that pins the certificate verified by the user.
 public final class CompanionPairingAttempt {
     public let peer: CompanionPeer
     public let comparisonCode: String
@@ -80,9 +77,7 @@ public final class CompanionPairingAttempt {
     public func cancel() { client.cancel() }
 }
 
-/// TLS 1.3 client for the intentionally small companion protocol. Pinned
-/// sends accept exactly the certificate paired in person; they never fall back
-/// to the system trust store or an mDNS-provided certificate fingerprint.
+/// TLS client for the paired companion protocol.
 public final class CompanionClient {
     public typealias Progress = (_ fileIndex: Int, _ fraction: Double) -> Void
 
@@ -107,17 +102,12 @@ public final class CompanionClient {
         sec_protocol_options_set_max_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
         sec_protocol_options_set_verify_block(tls.securityProtocolOptions, { _, trust, complete in
             let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
-            // This verify callback runs before Network has necessarily built the
-            // trust chain. Ask SecTrust for the peer's leaf directly so the
-            // first (unpinned) pairing connection can capture its fingerprint.
             let certificate = (SecTrustCopyCertificateChain(secTrust) as? [SecCertificate])?.first
             let fingerprint = certificate.map { Self.fingerprint(of: $0) }
             capture.value = fingerprint
             if let expected {
                 complete(fingerprint == expected)
             } else {
-                // Pairing does not grant trust merely because this connection
-                // opens: the separately displayed code binds this exact cert.
                 complete(fingerprint != nil)
             }
         }, queue)
@@ -132,8 +122,6 @@ public final class CompanionClient {
         captured = capture
     }
 
-    // Stored separately so the TLS verification callback can assign before the
-    // connection-ready callback resumes its async continuation.
     private let captured: LockedFingerprint
 
     public static func beginPairing(to peer: CompanionPeer, macName: String) async throws -> CompanionPairingAttempt {
@@ -349,9 +337,6 @@ private final class LockedFingerprint: @unchecked Sendable {
     }
 }
 
-/// NWConnection invokes both the state callback and our timeout on the same
-/// serial queue. The lock makes the one-resume invariant explicit anyway and
-/// keeps this bridge safe if Network changes its callback delivery.
 private final class ConnectionCompletion: @unchecked Sendable {
     private let lock = NSLock()
     private let connection: NWConnection

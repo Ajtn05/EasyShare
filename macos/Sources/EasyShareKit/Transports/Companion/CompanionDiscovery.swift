@@ -1,9 +1,7 @@
 import Foundation
 import Network
 
-/// A live, local Android companion receiver. Its advertised certificate
-/// fingerprint is only an availability filter: the TLS certificate is pinned
-/// from the certificate presented during the human-verified pairing exchange.
+/// A live Android companion receiver discovered on the local network.
 public struct CompanionPeer: Identifiable, Equatable {
     public let id: String
     public let displayName: String
@@ -42,8 +40,6 @@ public struct CompanionPeer: Identifiable, Equatable {
     }
 }
 
-/// DNS-SD discovery is deliberately transient. A paired phone only appears in
-/// Finder while its Android foreground receiver is actively advertising.
 public final class CompanionDiscovery {
     public var onChange: (([CompanionPeer]) -> Void)?
     public var onFailure: ((Error) -> Void)?
@@ -105,9 +101,6 @@ public final class CompanionDiscovery {
             let peer = CompanionPeer(
                 id: key, displayName: rawName, fingerprint: fingerprint, serviceEndpoint: result.endpoint
             )
-            // Preserve the initial observation while an individual Bonjour
-            // record remains present. A replacement listener is therefore
-            // newer than a stale record from the same Android app identity.
             if let previous = observations[key], previous.peer == peer {
                 nextObservations[key] = previous
             } else {
@@ -121,10 +114,6 @@ public final class CompanionDiscovery {
 
         observations = nextObservations
 
-        // An Android restart can briefly leave its previous advertisement
-        // visible while NsdManager completes asynchronous unregistration.
-        // Both entries have the same certificate fingerprint and represent one
-        // trusted companion, so present just the newest usable advertisement.
         var newestByFingerprint: [String: Observation] = [:]
         for observation in nextObservations.values {
             guard let current = newestByFingerprint[observation.peer.fingerprint] else {

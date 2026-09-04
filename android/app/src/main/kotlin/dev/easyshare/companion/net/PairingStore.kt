@@ -6,7 +6,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 
-/** Tokens are random capabilities and are only transmitted over pinned TLS. */
 class PairingStore(context: Context) {
     private val preferences = context.getSharedPreferences("paired-macs", Context.MODE_PRIVATE)
 
