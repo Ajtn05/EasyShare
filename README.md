@@ -9,8 +9,12 @@
 [![Android companion](https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white)](../../releases/latest)
 [![Security policy](https://img.shields.io/badge/Security-policy-2ea44f?logo=github&logoColor=white)](SECURITY.md)
 
-Easy Share transfers files both ways between a Mac and Android:
+Easy Share transfers files both ways between a Mac and Android
 
+</div>
+
+
+## Sharing between devices
 - **Android → Mac:** Android's built-in Quick Share sends to the small macOS
   menu-bar receiver.
 - **Mac → Android:** Finder → Share → Easy Share sends to a small, paired
@@ -25,7 +29,6 @@ That fallback cannot provide a durable recipient identity.
 Read [docs/HANDOFF.md](docs/HANDOFF.md) for the verification status, the test
 steps, and the intended UI.
 
-</div>
 
 ## Install
 
