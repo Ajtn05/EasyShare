@@ -1,9 +1,8 @@
-# Easy Share
-
+<div align="center">
 
 <img src="macos/App/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" width="160" alt="EasyShare">
 
-
+# Easy Share
 
 [![CI](../../actions/workflows/ci.yml/badge.svg?branch=main)](../../actions/workflows/ci.yml)
 [![macOS release](https://img.shields.io/badge/macOS-DMG-000000?logo=apple&logoColor=white)](../../releases/latest)
@@ -25,6 +24,8 @@ That fallback cannot provide a durable recipient identity.
 
 Read [docs/HANDOFF.md](docs/HANDOFF.md) for the verification status, the test
 steps, and the intended UI.
+
+</div>
 
 ## Install
 
