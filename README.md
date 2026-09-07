@@ -1,5 +1,10 @@
 # Easy Share
 
+
+<img src="macos/App/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" width="160" alt="EasyShare">
+
+
+
 [![CI](../../actions/workflows/ci.yml/badge.svg?branch=main)](../../actions/workflows/ci.yml)
 [![macOS release](https://img.shields.io/badge/macOS-DMG-000000?logo=apple&logoColor=white)](../../releases/latest)
 [![Android companion](https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white)](../../releases/latest)
